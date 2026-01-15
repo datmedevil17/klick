@@ -1,0 +1,1021 @@
+{
+  "address": "EuVuXeF5BjXoJi4FzcS6jMK4q6b17kAmcnBzVbLqg1Yn",
+  "metadata": {
+    "name": "typing_speed_game",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "commit",
+      "docs": [
+        "Manual commit the typing session account in the Ephemeral Rollup",
+        "This persists the current state to the base layer (checkpoint)"
+      ],
+      "discriminator": [
+        223,
+        140,
+        142,
+        165,
+        229,
+        208,
+        156,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "session",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delegate",
+      "docs": [
+        "Delegate the typing session account to the delegation program",
+        "Optionally set a specific validator from the first remaining account",
+        "See: https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup"
+      ],
+      "discriminator": [
+        90,
+        147,
+        75,
+        178,
+        85,
+        88,
+        4,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "buffer_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                206,
+                154,
+                208,
+                219,
+                124,
+                28,
+                130,
+                245,
+                220,
+                17,
+                232,
+                117,
+                222,
+                169,
+                161,
+                169,
+                254,
+                107,
+                188,
+                34,
+                139,
+                8,
+                183,
+                38,
+                15,
+                138,
+                27,
+                137,
+                90,
+                203,
+                84,
+                171
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_program",
+          "address": "EuVuXeF5BjXoJi4FzcS6jMK4q6b17kAmcnBzVbLqg1Yn"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "end_session",
+      "docs": [
+        "End typing session and calculate final stats"
+      ],
+      "discriminator": [
+        11,
+        244,
+        61,
+        154,
+        212,
+        249,
+        15,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "session",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "TypingSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_personal_record",
+      "docs": [
+        "Initialize personal record account for a player"
+      ],
+      "discriminator": [
+        235,
+        48,
+        97,
+        27,
+        132,
+        102,
+        127,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "personal_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  115,
+                  111,
+                  110,
+                  97,
+                  108,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Initialize a new typing session with starting values",
+        "Uses PDA derivation with player's public key for deterministic addresses"
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "session",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer"
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "save_to_record",
+      "docs": [
+        "Save session results to personal record",
+        "This updates lifetime stats and best scores"
+      ],
+      "discriminator": [
+        100,
+        66,
+        30,
+        166,
+        122,
+        48,
+        47,
+        2
+      ],
+      "accounts": [
+        {
+          "name": "session",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "TypingSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "personal_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  115,
+                  111,
+                  110,
+                  97,
+                  108,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "personal_record.player",
+                "account": "PersonalRecord"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "type_word",
+      "docs": [
+        "Record a typed word",
+        "Session tokens allow delegated signing for high-frequency actions"
+      ],
+      "discriminator": [
+        101,
+        184,
+        72,
+        74,
+        179,
+        211,
+        88,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "session",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "TypingSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "is_correct",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "undelegate",
+      "docs": [
+        "Undelegate the typing session account from the delegation program",
+        "This commits and removes the account from the Ephemeral Rollup"
+      ],
+      "discriminator": [
+        131,
+        148,
+        180,
+        198,
+        91,
+        104,
+        42,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "session",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "PersonalRecord",
+      "discriminator": [
+        203,
+        189,
+        231,
+        89,
+        6,
+        229,
+        169,
+        171
+      ]
+    },
+    {
+      "name": "SessionToken",
+      "discriminator": [
+        233,
+        4,
+        115,
+        14,
+        46,
+        21,
+        1,
+        15
+      ]
+    },
+    {
+      "name": "TypingSession",
+      "discriminator": [
+        160,
+        108,
+        98,
+        83,
+        228,
+        219,
+        5,
+        91
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "TypingCheckpoint",
+      "discriminator": [
+        30,
+        106,
+        96,
+        76,
+        58,
+        252,
+        122,
+        189
+      ]
+    },
+    {
+      "name": "TypingSessionEnded",
+      "discriminator": [
+        105,
+        131,
+        228,
+        84,
+        206,
+        205,
+        164,
+        86
+      ]
+    },
+    {
+      "name": "TypingSessionSaved",
+      "discriminator": [
+        66,
+        115,
+        129,
+        230,
+        83,
+        106,
+        226,
+        170
+      ]
+    },
+    {
+      "name": "TypingSessionStarted",
+      "discriminator": [
+        23,
+        128,
+        72,
+        156,
+        61,
+        99,
+        130,
+        148
+      ]
+    },
+    {
+      "name": "WordTyped",
+      "discriminator": [
+        253,
+        159,
+        69,
+        143,
+        16,
+        199,
+        3,
+        109
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "SessionNotActive",
+      "msg": "Session is not active"
+    },
+    {
+      "code": 6001,
+      "name": "SessionAlreadyEnded",
+      "msg": "Session already ended"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidAuth",
+      "msg": "Invalid authentication"
+    },
+    {
+      "code": 6003,
+      "name": "MaxAttemptsReached",
+      "msg": "Maximum attempts reached (30)"
+    },
+    {
+      "code": 6004,
+      "name": "SessionStillActive",
+      "msg": "Session is still active"
+    }
+  ],
+  "types": [
+    {
+      "name": "PersonalRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "docs": [
+              "The player who owns this record"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "attempt_count",
+            "docs": [
+              "Total number of attempts"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "total_words_typed",
+            "docs": [
+              "Lifetime words typed"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_correct_words",
+            "docs": [
+              "Lifetime correct words"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "best_wpm",
+            "docs": [
+              "Best WPM achieved"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "best_accuracy",
+            "docs": [
+              "Best accuracy achieved"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "attempts",
+            "docs": [
+              "History of all attempts"
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "TypingAttempt"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SessionToken",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "session_signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TypingAttempt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "attempt_number",
+            "type": "u32"
+          },
+          {
+            "name": "words_typed",
+            "type": "u32"
+          },
+          {
+            "name": "correct_words",
+            "type": "u32"
+          },
+          {
+            "name": "errors",
+            "type": "u32"
+          },
+          {
+            "name": "wpm",
+            "type": "u16"
+          },
+          {
+            "name": "accuracy",
+            "type": "u8"
+          },
+          {
+            "name": "duration",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TypingCheckpoint",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "words_typed",
+            "type": "u32"
+          },
+          {
+            "name": "accuracy",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TypingSession",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "docs": [
+              "The player who owns this session"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "words_typed",
+            "docs": [
+              "Total words typed"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "correct_words",
+            "docs": [
+              "Number of correct words"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "errors",
+            "docs": [
+              "Number of errors"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "wpm",
+            "docs": [
+              "Words per minute"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "accuracy",
+            "docs": [
+              "Accuracy percentage"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether the session is active"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "started_at",
+            "docs": [
+              "Session start timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "ended_at",
+            "docs": [
+              "Session end timestamp"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TypingSessionEnded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "words_typed",
+            "type": "u32"
+          },
+          {
+            "name": "wpm",
+            "type": "u16"
+          },
+          {
+            "name": "accuracy",
+            "type": "u8"
+          },
+          {
+            "name": "duration",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TypingSessionSaved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "attempt_number",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TypingSessionStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WordTyped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "word_number",
+            "type": "u32"
+          },
+          {
+            "name": "is_correct",
+            "type": "bool"
+          },
+          {
+            "name": "current_accuracy",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
