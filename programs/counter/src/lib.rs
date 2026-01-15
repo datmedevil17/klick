@@ -20,7 +20,7 @@ pub mod typing_speed_game {
         session.player = ctx.accounts.player.key();
         session.words_typed = 0;
         session.correct_words = 0;
-        session.errors = 0; 
+        session.errors = 0;
         session.is_active = true;
         session.started_at = clock.unix_timestamp;
         session.ended_at = None;
@@ -157,6 +157,13 @@ pub mod typing_speed_game {
             TypingError::MaxAttemptsReached
         );
 
+        // Prevent saving the same session twice
+        if let Some(last_attempt) = personal_record.attempts.last() {
+            if last_attempt.timestamp == session.ended_at.unwrap_or(0) {
+                return err!(TypingError::SessionAlreadySaved);
+            }
+        }
+
         let duration = session.ended_at.unwrap_or(0) - session.started_at;
 
         let attempt = TypingAttempt {
@@ -170,8 +177,8 @@ pub mod typing_speed_game {
             timestamp: session.ended_at.unwrap_or(0),
         };
 
-        let idx = personal_record.attempt_count as usize;
-        personal_record.attempts[idx] = attempt;
+        // Use push instead of index access since Vec starts empty
+        personal_record.attempts.push(attempt);
         personal_record.attempt_count = personal_record.attempt_count.checked_add(1).unwrap();
         personal_record.total_words_typed = personal_record
             .total_words_typed
@@ -480,4 +487,6 @@ pub enum TypingError {
     MaxAttemptsReached,
     #[msg("Session is still active")]
     SessionStillActive,
+    #[msg("Session already saved")]
+    SessionAlreadySaved,
 }

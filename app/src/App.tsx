@@ -1,5 +1,5 @@
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { Counter } from "./components/Counter";
+// import { Counter } from "./components/Counter";
 import { Demo } from "./components/Demo";
 import "./index.css";
 
@@ -36,7 +36,7 @@ export function App() {
             </header>
 
             <main>
-              <Counter />
+              {/* <Counter /> */}
             </main>
 
             <footer className="text-center mt-8 text-gray-500 text-sm">

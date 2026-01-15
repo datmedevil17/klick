@@ -2,12 +2,37 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, setProvider } from "@coral-xyz/anchor";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { type TypingSpeedGame } from "../idl/typing_speed_game";
-import IDL from "../idl/typing_speed_game.json";
+import { type TypingSpeedGame } from "../programs/typing_speed_game";
+import IDL from "../programs/typing_speed_game.json";
 import { useSessionKeyManager } from "@magicblock-labs/gum-react-sdk";
 
 // Note: @magicblock-labs/ephemeral-rollups-sdk is imported dynamically to avoid
 // Buffer not defined errors during module initialization
+
+// ========================================
+// Console Logging Utilities
+// ========================================
+const LOG_PREFIX = "🎮 [TypingGame]";
+
+const logInfo = (message: string, ...args: any[]) => {
+    console.log(`${LOG_PREFIX} ℹ️ ${message}`, ...args);
+};
+
+const logSuccess = (message: string, ...args: any[]) => {
+    console.log(`${LOG_PREFIX} ✅ ${message}`, ...args);
+};
+
+const logError = (message: string, ...args: any[]) => {
+    console.error(`${LOG_PREFIX} ❌ ${message}`, ...args);
+};
+
+const logWarning = (message: string, ...args: any[]) => {
+    console.warn(`${LOG_PREFIX} ⚠️ ${message}`, ...args);
+};
+
+const logStep = (step: number, total: number, message: string) => {
+    console.log(`${LOG_PREFIX} [${step}/${total}] ${message}`);
+};
 
 // TypingSession account data structure
 interface TypingSessionAccount {
@@ -33,7 +58,7 @@ interface PersonalRecordAccount {
     attempts: TypingAttempt[];
 }
 
-// TypingAttempt structure
+// Typing attempt structure
 interface TypingAttempt {
     attemptNumber: number;
     wordsTyped: number;
@@ -57,16 +82,17 @@ export type DelegationStatus = "undelegated" | "delegated" | "checking";
  * Provides real-time updates via WebSocket subscriptions.
  * Supports MagicBlock Ephemeral Rollups for delegation, commit, and undelegation.
  */
-export function useTypingSpeedGameProgram() {
+export function useTypingGameProgram() {
     const { connection } = useConnection();
     const wallet = useWallet();
 
     const [sessionPubkey, setSessionPubkeyState] = useState<PublicKey | null>(() => {
-        // Derive PDA from wallet public key if connected
         return null;
     });
 
-    const [personalRecordPubkey, setPersonalRecordPubkeyState] = useState<PublicKey | null>(null);
+    const [personalRecordPubkey, setPersonalRecordPubkeyState] = useState<PublicKey | null>(() => {
+        return null;
+    });
 
     const [sessionAccount, setSessionAccount] = useState<TypingSessionAccount | null>(null);
     const [personalRecordAccount, setPersonalRecordAccount] = useState<PersonalRecordAccount | null>(null);
@@ -74,13 +100,18 @@ export function useTypingSpeedGameProgram() {
     const [isDelegating, setIsDelegating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [delegationStatus, setDelegationStatus] = useState<DelegationStatus>("checking");
-    const [erSessionData, setErSessionData] = useState<TypingSessionAccount | null>(null);
+    const [erSessionValue, setErSessionValue] = useState<TypingSessionAccount | null>(null);
 
     // Base layer Anchor provider and program
     const program = useMemo(() => {
         if (!wallet.publicKey || !wallet.signTransaction || !wallet.signAllTransactions) {
             return null;
         }
+
+        logInfo("Initializing Anchor program...", {
+            wallet: wallet.publicKey.toBase58(),
+            programId: IDL.address
+        });
 
         const provider = new AnchorProvider(
             connection,
@@ -94,11 +125,17 @@ export function useTypingSpeedGameProgram() {
 
         setProvider(provider);
 
-        return new Program<TypingSpeedGame>(IDL as TypingSpeedGame, provider);
+        const prog = new Program<TypingSpeedGame>(IDL as TypingSpeedGame, provider);
+        logSuccess("Anchor program initialized", {
+            programId: prog.programId.toBase58()
+        });
+
+        return prog;
     }, [connection, wallet.publicKey, wallet.signTransaction, wallet.signAllTransactions]);
 
     // Ephemeral Rollup connection and provider
     const erConnection = useMemo(() => {
+        logInfo("Creating ER connection...", { endpoint: ER_ENDPOINT });
         return new Connection(ER_ENDPOINT, {
             wsEndpoint: ER_WS_ENDPOINT,
             commitment: "confirmed",
@@ -110,6 +147,7 @@ export function useTypingSpeedGameProgram() {
             return null;
         }
 
+        logInfo("Creating ER provider...");
         return new AnchorProvider(
             erConnection,
             {
@@ -126,6 +164,7 @@ export function useTypingSpeedGameProgram() {
             return null;
         }
 
+        logSuccess("ER program ready");
         return new Program<TypingSpeedGame>(IDL as TypingSpeedGame, erProvider);
     }, [erProvider]);
 
@@ -136,21 +175,16 @@ export function useTypingSpeedGameProgram() {
         "devnet"
     );
 
-    const { sessionToken, createSession: sdkCreateSession, revokeSession: sdkRevokeSession, isLoading: isSessionLoading } = sessionWallet;
+    const { sessionToken, createSession: sdkCreateSession, isLoading: isSessionLoading } = sessionWallet;
 
     const createSession = useCallback(async () => {
-        return await sdkCreateSession(new PublicKey(IDL.address));
-    }, [sdkCreateSession]);
-
-    const revokeSession = useCallback(async () => {
-        if (!sdkRevokeSession) {
-            throw new Error("Revoke session not available");
-        }
-        console.log("🔒 Revoking session key...");
-        const result = await sdkRevokeSession();
-        console.log("✅ Session key revoked:", result);
+        logInfo("Creating session key for program...", { programId: IDL.address });
+        const result = await sdkCreateSession(new PublicKey(IDL.address));
+        logSuccess("Session key created!", {
+            sessionToken: sessionToken ? String(sessionToken) : "pending"
+        });
         return result;
-    }, [sdkRevokeSession]);
+    }, [sdkCreateSession, sessionToken]);
 
     // Derive session PDA from wallet public key
     const deriveSessionPDA = useCallback((player: PublicKey) => {
@@ -161,7 +195,7 @@ export function useTypingSpeedGameProgram() {
         return pda;
     }, []);
 
-    // Derive personal record PDA from wallet public key
+    // Derive personal record PDA
     const derivePersonalRecordPDA = useCallback((player: PublicKey) => {
         const [pda] = PublicKey.findProgramAddressSync(
             [Buffer.from("personal_record"), player.toBuffer()],
@@ -170,145 +204,182 @@ export function useTypingSpeedGameProgram() {
         return pda;
     }, []);
 
-    // Auto-derive PDAs when wallet connects
+    // Auto-derive session PDA when wallet connects
     useEffect(() => {
         if (wallet.publicKey) {
             const sessionPda = deriveSessionPDA(wallet.publicKey);
-            const personalRecordPda = derivePersonalRecordPDA(wallet.publicKey);
             setSessionPubkeyState(sessionPda);
+            
+            const personalRecordPda = derivePersonalRecordPDA(wallet.publicKey);
             setPersonalRecordPubkeyState(personalRecordPda);
+
+            logInfo("PDAs derived for wallet", {
+                wallet: wallet.publicKey.toBase58(),
+                sessionPDA: sessionPda.toBase58(),
+                personalRecordPDA: personalRecordPda.toBase58()
+            });
         } else {
             setSessionPubkeyState(null);
             setPersonalRecordPubkeyState(null);
+            logWarning("Wallet disconnected, PDAs cleared");
         }
     }, [wallet.publicKey, deriveSessionPDA, derivePersonalRecordPDA]);
 
-    // Fetch typing session account data from base layer
+    // Parse session account from raw data
+    const parseSessionAccount = useCallback((account: any): TypingSessionAccount => {
+        return {
+            player: account.player,
+            wordsTyped: account.wordsTyped,
+            correctWords: account.correctWords,
+            errors: account.errors,
+            wpm: account.wpm,
+            accuracy: account.accuracy,
+            isActive: account.isActive,
+            startedAt: BigInt(account.startedAt.toString()),
+            endedAt: account.endedAt ? BigInt(account.endedAt.toString()) : null,
+        };
+    }, []);
+
+    // Parse personal record account from raw data
+    const parsePersonalRecordAccount = useCallback((account: any): PersonalRecordAccount => {
+        return {
+            player: account.player,
+            attemptCount: account.attemptCount,
+            totalWordsTyped: BigInt(account.totalWordsTyped.toString()),
+            totalCorrectWords: BigInt(account.totalCorrectWords.toString()),
+            bestWpm: account.bestWpm,
+            bestAccuracy: account.bestAccuracy,
+            attempts: account.attempts.map((attempt: any) => ({
+                attemptNumber: attempt.attemptNumber,
+                wordsTyped: attempt.wordsTyped,
+                correctWords: attempt.correctWords,
+                errors: attempt.errors,
+                wpm: attempt.wpm,
+                accuracy: attempt.accuracy,
+                duration: BigInt(attempt.duration.toString()),
+                timestamp: BigInt(attempt.timestamp.toString()),
+            })),
+        };
+    }, []);
+
+    // Fetch session account data from base layer
     const fetchSessionAccount = useCallback(async () => {
         if (!program || !sessionPubkey) {
             setSessionAccount(null);
             return;
         }
 
+        logInfo("Fetching session account...", { sessionPDA: sessionPubkey.toBase58() });
+
         try {
             const account = await program.account.typingSession.fetch(sessionPubkey);
-            setSessionAccount({
-                player: account.player,
-                wordsTyped: account.wordsTyped,
-                correctWords: account.correctWords,
-                errors: account.errors,
-                wpm: account.wpm,
-                accuracy: account.accuracy,
-                isActive: account.isActive,
-                startedAt: BigInt(account.startedAt.toString()),
-                endedAt: account.endedAt ? BigInt(account.endedAt.toString()) : null,
-            });
+            const parsed = parseSessionAccount(account);
+            setSessionAccount(parsed);
             setError(null);
+            
+            logSuccess("Session account fetched", {
+                player: parsed.player.toBase58(),
+                wordsTyped: parsed.wordsTyped,
+                correctWords: parsed.correctWords,
+                wpm: parsed.wpm,
+                accuracy: parsed.accuracy,
+                isActive: parsed.isActive
+            });
         } catch (err) {
-            // This is expected when the session hasn't been initialized yet
-            console.debug("Session account not found (this is normal for new wallets):", err);
+            logWarning("Session account not found (normal for new users)");
             setSessionAccount(null);
-            // Only set error for unexpected errors, not "account does not exist"
             if (err instanceof Error && !err.message.includes("Account does not exist") && !err.message.includes("could not find account")) {
                 setError(err.message);
             }
         }
-    }, [program, sessionPubkey]);
+    }, [program, sessionPubkey, parseSessionAccount]);
 
-    // Fetch personal record account data from base layer
+    // Fetch personal record account from base layer
     const fetchPersonalRecordAccount = useCallback(async () => {
         if (!program || !personalRecordPubkey) {
             setPersonalRecordAccount(null);
             return;
         }
 
+        logInfo("Fetching personal record...", { personalRecordPDA: personalRecordPubkey.toBase58() });
+
         try {
             const account = await program.account.personalRecord.fetch(personalRecordPubkey);
-            setPersonalRecordAccount({
-                player: account.player,
-                attemptCount: account.attemptCount,
-                totalWordsTyped: BigInt(account.totalWordsTyped.toString()),
-                totalCorrectWords: BigInt(account.totalCorrectWords.toString()),
-                bestWpm: account.bestWpm,
-                bestAccuracy: account.bestAccuracy,
-                attempts: account.attempts.map((a: any) => ({
-                    attemptNumber: a.attemptNumber,
-                    wordsTyped: a.wordsTyped,
-                    correctWords: a.correctWords,
-                    errors: a.errors,
-                    wpm: a.wpm,
-                    accuracy: a.accuracy,
-                    duration: BigInt(a.duration.toString()),
-                    timestamp: BigInt(a.timestamp.toString()),
-                })),
-            });
+            const parsed = parsePersonalRecordAccount(account);
+            setPersonalRecordAccount(parsed);
             setError(null);
+            
+            logSuccess("Personal record fetched", {
+                attemptCount: parsed.attemptCount,
+                bestWpm: parsed.bestWpm,
+                bestAccuracy: parsed.bestAccuracy
+            });
         } catch (err) {
-            console.debug("Personal record not found (this is normal for new players):", err);
+            logWarning("Personal record not found");
             setPersonalRecordAccount(null);
         }
-    }, [program, personalRecordPubkey]);
+    }, [program, personalRecordPubkey, parsePersonalRecordAccount]);
 
-    // Delegation Program address - when an account is delegated, its owner changes to this
+    // Delegation Program address
     const DELEGATION_PROGRAM_ID = new PublicKey("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
 
-    // Check if account is delegated by checking the account owner on base layer
+    // Check if account is delegated
     const checkDelegationStatus = useCallback(async () => {
         if (!sessionPubkey) {
             setDelegationStatus("checking");
             return;
         }
 
+        logInfo("Checking delegation status...", { sessionPDA: sessionPubkey.toBase58() });
+
         try {
             setDelegationStatus("checking");
 
-            // Get account info from base layer to check the owner
             const accountInfo = await connection.getAccountInfo(sessionPubkey);
 
             if (!accountInfo) {
-                // Account doesn't exist yet
+                logInfo("Session account does not exist yet");
                 setDelegationStatus("undelegated");
-                setErSessionData(null);
+                setErSessionValue(null);
                 return;
             }
 
-            // Check if the account owner is the delegation program
             const isDelegated = accountInfo.owner.equals(DELEGATION_PROGRAM_ID);
 
             if (isDelegated) {
+                logSuccess("Session is DELEGATED to ER", {
+                    owner: accountInfo.owner.toBase58()
+                });
                 setDelegationStatus("delegated");
-                // Try to fetch the session data from ER
+                
                 if (erProgram) {
                     try {
                         const account = await erProgram.account.typingSession.fetch(sessionPubkey);
-                        setErSessionData({
-                            player: account.player,
-                            wordsTyped: account.wordsTyped,
-                            correctWords: account.correctWords,
-                            errors: account.errors,
-                            wpm: account.wpm,
-                            accuracy: account.accuracy,
-                            isActive: account.isActive,
-                            startedAt: BigInt(account.startedAt.toString()),
-                            endedAt: account.endedAt ? BigInt(account.endedAt.toString()) : null,
+                        const parsed = parseSessionAccount(account);
+                        setErSessionValue(parsed);
+                        logSuccess("ER session state fetched", {
+                            wordsTyped: parsed.wordsTyped,
+                            wpm: parsed.wpm
                         });
                     } catch {
-                        // Couldn't fetch from ER, but it's still delegated
-                        console.debug("Couldn't fetch session from ER");
+                        logWarning("Couldn't fetch ER session state");
                     }
                 }
             } else {
+                logInfo("Session is UNDELEGATED (on base layer)", {
+                    owner: accountInfo.owner.toBase58()
+                });
                 setDelegationStatus("undelegated");
-                setErSessionData(null);
+                setErSessionValue(null);
             }
         } catch (err) {
-            console.debug("Error checking delegation status:", err);
+            logError("Error checking delegation status", err);
             setDelegationStatus("undelegated");
-            setErSessionData(null);
+            setErSessionValue(null);
         }
-    }, [sessionPubkey, connection, erProgram]);
+    }, [sessionPubkey, connection, erProgram, parseSessionAccount]);
 
-    // Subscribe to base layer account changes via WebSocket
+    // Subscribe to base layer account changes
     useEffect(() => {
         if (!program || !sessionPubkey) {
             return;
@@ -318,27 +389,19 @@ export function useTypingSpeedGameProgram() {
         fetchPersonalRecordAccount();
         checkDelegationStatus();
 
+        logInfo("Subscribing to base layer account changes...");
+
         const subscriptionId = connection.onAccountChange(
             sessionPubkey,
             async (accountInfo) => {
                 try {
                     const decoded = program.coder.accounts.decode("typingSession", accountInfo.data);
-                    setSessionAccount({
-                        player: decoded.player,
-                        wordsTyped: decoded.wordsTyped,
-                        correctWords: decoded.correctWords,
-                        errors: decoded.errors,
-                        wpm: decoded.wpm,
-                        accuracy: decoded.accuracy,
-                        isActive: decoded.isActive,
-                        startedAt: BigInt(decoded.startedAt.toString()),
-                        endedAt: decoded.endedAt ? BigInt(decoded.endedAt.toString()) : null,
-                    });
+                    setSessionAccount(parseSessionAccount(decoded));
                     setError(null);
-                    // Recheck delegation status when base layer changes
+                    logInfo("Base layer account updated via WebSocket");
                     checkDelegationStatus();
                 } catch (err) {
-                    console.error("Failed to decode account data:", err);
+                    logError("Failed to decode account data", err);
                 }
             },
             "confirmed"
@@ -346,8 +409,9 @@ export function useTypingSpeedGameProgram() {
 
         return () => {
             connection.removeAccountChangeListener(subscriptionId);
+            logInfo("Unsubscribed from base layer account changes");
         };
-    }, [program, sessionPubkey, connection, fetchSessionAccount, fetchPersonalRecordAccount, checkDelegationStatus]);
+    }, [program, sessionPubkey, connection, fetchSessionAccount, fetchPersonalRecordAccount, checkDelegationStatus, parseSessionAccount]);
 
     // Subscribe to ER account changes when delegated
     useEffect(() => {
@@ -355,24 +419,21 @@ export function useTypingSpeedGameProgram() {
             return;
         }
 
+        logInfo("Subscribing to ER account changes...");
+
         const subscriptionId = erConnection.onAccountChange(
             sessionPubkey,
             async (accountInfo) => {
                 try {
                     const decoded = erProgram.coder.accounts.decode("typingSession", accountInfo.data);
-                    setErSessionData({
-                        player: decoded.player,
-                        wordsTyped: decoded.wordsTyped,
-                        correctWords: decoded.correctWords,
-                        errors: decoded.errors,
-                        wpm: decoded.wpm,
-                        accuracy: decoded.accuracy,
-                        isActive: decoded.isActive,
-                        startedAt: BigInt(decoded.startedAt.toString()),
-                        endedAt: decoded.endedAt ? BigInt(decoded.endedAt.toString()) : null,
+                    const parsed = parseSessionAccount(decoded);
+                    setErSessionValue(parsed);
+                    logInfo("ER account updated via WebSocket", {
+                        wordsTyped: parsed.wordsTyped,
+                        wpm: parsed.wpm
                     });
                 } catch (err) {
-                    console.error("Failed to decode ER account data:", err);
+                    logError("Failed to decode ER account data", err);
                 }
             },
             "confirmed"
@@ -380,14 +441,22 @@ export function useTypingSpeedGameProgram() {
 
         return () => {
             erConnection.removeAccountChangeListener(subscriptionId);
+            logInfo("Unsubscribed from ER account changes");
         };
-    }, [erProgram, sessionPubkey, erConnection, delegationStatus]);
+    }, [erProgram, sessionPubkey, erConnection, delegationStatus, parseSessionAccount]);
 
-    // Initialize a new typing session (uses PDA derived from wallet)
+    // ========================================
+    // Base Layer Operations
+    // ========================================
+
+    // Initialize a new typing session
     const initialize = useCallback(async (): Promise<string> => {
         if (!program || !wallet.publicKey) {
             throw new Error("Wallet not connected");
         }
+
+        logStep(1, 3, "Initializing typing session on-chain...");
+        logInfo("Session PDA:", sessionPubkey?.toBase58());
 
         setIsLoading(true);
         setError(null);
@@ -400,25 +469,31 @@ export function useTypingSpeedGameProgram() {
                 })
                 .rpc();
 
-            // PDA is already set from wallet connection
-            console.log(`🚀 [Base] Session Initialized! TX: ${tx}`);
-            console.log(`📍 [Base] Session PDA: ${sessionPubkey?.toBase58()}`);
+            logSuccess("SESSION INITIALIZED!", {
+                txSignature: tx,
+                sessionPDA: sessionPubkey?.toBase58(),
+                player: wallet.publicKey.toBase58()
+            });
+
             await fetchSessionAccount();
             return tx;
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to initialize session";
+            logError("Failed to initialize session", { error: message });
             setError(message);
             throw err;
         } finally {
             setIsLoading(false);
         }
-    }, [program, wallet.publicKey, fetchSessionAccount]);
+    }, [program, wallet.publicKey, sessionPubkey, fetchSessionAccount]);
 
-    // Initialize personal record
+    // Initialize personal record account
     const initPersonalRecord = useCallback(async (): Promise<string> => {
         if (!program || !wallet.publicKey) {
             throw new Error("Wallet not connected");
         }
+
+        logInfo("Initializing personal record...");
 
         setIsLoading(true);
         setError(null);
@@ -431,24 +506,30 @@ export function useTypingSpeedGameProgram() {
                 })
                 .rpc();
 
-            console.log(`🚀 [Base] Personal Record Initialized! TX: ${tx}`);
-            console.log(`📍 [Base] Record PDA: ${personalRecordPubkey?.toBase58()}`);
+            logSuccess("PERSONAL RECORD INITIALIZED!", {
+                txSignature: tx,
+                personalRecordPDA: personalRecordPubkey?.toBase58()
+            });
+
             await fetchPersonalRecordAccount();
             return tx;
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to initialize personal record";
+            logError("Failed to initialize personal record", { error: message });
             setError(message);
             throw err;
         } finally {
             setIsLoading(false);
         }
-    }, [program, wallet.publicKey, fetchPersonalRecordAccount]);
+    }, [program, wallet.publicKey, personalRecordPubkey, fetchPersonalRecordAccount]);
 
     // Type a word (on base layer)
     const typeWord = useCallback(async (isCorrect: boolean): Promise<string> => {
         if (!program || !wallet.publicKey || !sessionPubkey) {
             throw new Error("Session not initialized");
         }
+
+        logInfo("Recording word on base layer...", { isCorrect });
 
         setIsLoading(true);
         setError(null);
@@ -463,10 +544,11 @@ export function useTypingSpeedGameProgram() {
                 } as any)
                 .rpc();
 
-            console.log(`🚀 [Base] Typed Word (${isCorrect ? "Correct" : "Wrong"})! TX: ${tx}`);
+            logSuccess("Word recorded on base layer", { txSignature: tx, isCorrect });
             return tx;
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to type word";
+            logError("Failed to record word", { error: message });
             setError(message);
             throw err;
         } finally {
@@ -474,108 +556,13 @@ export function useTypingSpeedGameProgram() {
         }
     }, [program, wallet.publicKey, sessionPubkey]);
 
-    const performErAction = useCallback(async (
-        methodBuilder: any,
-        actionName: string
-    ): Promise<string> => {
-        if (!program || !erProvider || !wallet.publicKey || !sessionPubkey) {
-            throw new Error("Session not initialized or not delegated");
-        }
-
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            // Check if we have a valid session
-            const hasSession = sessionToken != null && sessionWallet != null;
-            const signer = hasSession ? sessionWallet.publicKey : wallet.publicKey;
-
-            // Build accounts - must explicitly pass session PDA due to self-referencing derivation
-            const accounts: any = {
-                session: sessionPubkey,
-                signer: signer,
-                sessionToken: hasSession ? sessionToken : null,
-            };
-
-            // Build transaction using base program structure but targeted at ER accounts
-            let tx = await methodBuilder
-                .accounts(accounts)
-                .transaction();
-
-            // Set up for ER connection
-            tx.feePayer = wallet.publicKey;
-            tx.recentBlockhash = (await erConnection.getLatestBlockhash()).blockhash;
-
-            if (hasSession && sessionWallet && sessionWallet.signTransaction) {
-                tx.feePayer = sessionWallet.publicKey;
-                tx = await sessionWallet.signTransaction(tx);
-            } else {
-                tx = await erProvider.wallet.signTransaction(tx);
-            }
-
-            // Send using raw connection
-            const txHash = await erConnection.sendRawTransaction(tx.serialize(), {
-                skipPreflight: true,
-            });
-            console.log(`🚀 [ER] ${actionName} - TX sent:`, txHash);
-            console.log(`🔗 [ER] Explorer: https://explorer.solana.com/tx/${txHash}?cluster=custom&customUrl=https://devnet.magicblock.app`);
-            
-            await erConnection.confirmTransaction(txHash, "confirmed");
-            console.log(`✅ [ER] ${actionName} - TX confirmed:`, txHash);
-
-            // Refresh ER session data
-            console.log(`🔄 [ER] Fetching updated session data from ER...`);
-            if (erProgram && sessionPubkey) {
-                try {
-                    console.log(`📍 [ER] Fetching session at: ${sessionPubkey.toBase58()}`);
-                    const account = await erProgram.account.typingSession.fetch(sessionPubkey);
-                    console.log(`📦 [ER] Raw account data:`, account);
-                    setErSessionData({
-                        player: account.player,
-                        wordsTyped: account.wordsTyped,
-                        correctWords: account.correctWords,
-                        errors: account.errors,
-                        wpm: account.wpm,
-                        accuracy: account.accuracy,
-                        isActive: account.isActive,
-                        startedAt: BigInt(account.startedAt.toString()),
-                        endedAt: account.endedAt ? BigInt(account.endedAt.toString()) : null,
-                    });
-                    console.log(`📊 [ER] Session data updated - Words: ${account.wordsTyped}, Correct: ${account.correctWords}, Errors: ${account.errors}`);
-                } catch (fetchErr) {
-                    console.error(`❌ [ER] Failed to fetch session data:`, fetchErr);
-                }
-            } else {
-                console.warn(`⚠️ [ER] Cannot fetch - erProgram: ${!!erProgram}, sessionPubkey: ${sessionPubkey?.toBase58()}`);
-            }
-
-            return txHash;
-        } catch (err) {
-            const message = err instanceof Error ? err.message : `Failed to ${actionName} on ER`;
-            setError(message);
-            throw err;
-        } finally {
-            setIsLoading(false);
-        }
-    }, [program, erProvider, erConnection, erProgram, wallet.publicKey, sessionPubkey, sessionToken, sessionWallet]);
-
-    // Type a word on Ephemeral Rollup
-    const typeWordOnER = useCallback(async (isCorrect: boolean): Promise<string> => {
-        if (!program) throw new Error("Program not loaded");
-        return performErAction(program.methods.typeWord(isCorrect), "type word");
-    }, [program, performErAction]);
-
-    // End session on Ephemeral Rollup
-    const endSessionOnER = useCallback(async (): Promise<string> => {
-        if (!program) throw new Error("Program not loaded");
-        return performErAction(program.methods.endSession(), "end session");
-    }, [program, performErAction]);
-
     // End typing session (on base layer)
     const endSession = useCallback(async (): Promise<string> => {
         if (!program || !wallet.publicKey || !sessionPubkey) {
             throw new Error("Session not initialized");
         }
+
+        logInfo("Ending session on base layer...");
 
         setIsLoading(true);
         setError(null);
@@ -590,11 +577,12 @@ export function useTypingSpeedGameProgram() {
                 } as any)
                 .rpc();
 
-            console.log(`🚀 [Base] Session Ended! TX: ${tx}`);
+            logSuccess("SESSION ENDED on base layer", { txSignature: tx });
             await fetchSessionAccount();
             return tx;
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to end session";
+            logError("Failed to end session", { error: message });
             setError(message);
             throw err;
         } finally {
@@ -602,11 +590,13 @@ export function useTypingSpeedGameProgram() {
         }
     }, [program, wallet.publicKey, sessionPubkey, fetchSessionAccount]);
 
-    // Save session to personal record (on base layer)
+    // Save session to personal record
     const saveToRecord = useCallback(async (): Promise<string> => {
-        if (!program || !wallet.publicKey || !sessionPubkey) {
-            throw new Error("Session not initialized");
+        if (!program || !wallet.publicKey || !sessionPubkey || !personalRecordPubkey) {
+            throw new Error("Session or personal record not initialized");
         }
+
+        logInfo("Saving session to personal record...");
 
         setIsLoading(true);
         setError(null);
@@ -621,27 +611,136 @@ export function useTypingSpeedGameProgram() {
                 } as any)
                 .rpc();
 
-            console.log(`🚀 [Base] Saved to Record! TX: ${tx}`);
+            logSuccess("SESSION SAVED to personal record!", { txSignature: tx });
             await fetchPersonalRecordAccount();
             return tx;
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to save to record";
+            logError("Failed to save to record", { error: message });
             setError(message);
             throw err;
         } finally {
             setIsLoading(false);
         }
-    }, [program, wallet.publicKey, sessionPubkey, fetchPersonalRecordAccount]);
+    }, [program, wallet.publicKey, sessionPubkey, personalRecordPubkey, fetchPersonalRecordAccount]);
 
     // ========================================
-    // Ephemeral Rollups Functions
+    // Ephemeral Rollup Operations
     // ========================================
 
-    // Delegate the typing session to Ephemeral Rollups
+    // Generic ER action performer
+    const performErAction = useCallback(async (
+        methodBuilder: any,
+        actionName: string
+    ): Promise<string> => {
+        if (!program || !erProvider || !wallet.publicKey || !sessionPubkey) {
+            throw new Error("Session not initialized or not delegated");
+        }
+
+        logInfo(`Performing ER action: ${actionName}...`);
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const hasSession = sessionToken != null && sessionWallet != null;
+            const signer = hasSession ? sessionWallet.publicKey : wallet.publicKey;
+
+            logInfo("Transaction signer:", {
+                usingSessionKey: hasSession,
+                signer: signer?.toBase58()
+            });
+
+            const accounts: any = {
+                session: sessionPubkey,
+                signer: signer,
+                sessionToken: hasSession ? sessionToken : null,
+            };
+
+            let tx = await methodBuilder
+                .accounts(accounts)
+                .transaction();
+
+            tx.feePayer = wallet.publicKey;
+            tx.recentBlockhash = (await erConnection.getLatestBlockhash()).blockhash;
+
+            if (hasSession && sessionWallet && sessionWallet.signTransaction) {
+                tx.feePayer = sessionWallet.publicKey;
+                tx = await sessionWallet.signTransaction(tx);
+                logInfo("Transaction signed with session key");
+            } else {
+                tx = await erProvider.wallet.signTransaction(tx);
+                logInfo("Transaction signed with wallet");
+            }
+
+            const txHash = await erConnection.sendRawTransaction(tx.serialize(), {
+                skipPreflight: true,
+            });
+            
+            logInfo(`ER transaction sent: ${txHash}`);
+            
+            await erConnection.confirmTransaction(txHash, "confirmed");
+
+            logSuccess(`ER ACTION COMPLETE: ${actionName}`, {
+                txSignature: txHash,
+                sessionPDA: sessionPubkey.toBase58()
+            });
+
+            if (erProgram) {
+                try {
+                    const account = await erProgram.account.typingSession.fetch(sessionPubkey);
+                    const parsed = parseSessionAccount(account);
+                    setErSessionValue(parsed);
+                    logInfo("ER state after action:", {
+                        wordsTyped: parsed.wordsTyped,
+                        wpm: parsed.wpm,
+                        accuracy: parsed.accuracy
+                    });
+                } catch {
+                    // Ignore fetch errors
+                }
+            }
+
+            return txHash;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : `Failed to ${actionName} on ER`;
+            logError(`Failed ER action: ${actionName}`, { error: message });
+            setError(message);
+            throw err;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [program, erProvider, erConnection, erProgram, wallet.publicKey, sessionPubkey, sessionToken, sessionWallet, parseSessionAccount]);
+
+    // Type a word on Ephemeral Rollup
+    const typeWordOnER = useCallback(async (isCorrect: boolean): Promise<string> => {
+        if (!program) throw new Error("Program not loaded");
+        logInfo("Recording word on ER...", { isCorrect });
+        return performErAction(program.methods.typeWord(isCorrect), `typeWord(${isCorrect})`);
+    }, [program, performErAction]);
+
+    // End session on Ephemeral Rollup
+    const endSessionOnER = useCallback(async (): Promise<string> => {
+        if (!program) throw new Error("Program not loaded");
+        logInfo("Ending session on ER...");
+        return performErAction(program.methods.endSession(), "endSession");
+    }, [program, performErAction]);
+
+    // ========================================
+    // Delegation Functions
+    // ========================================
+
+    // Delegate the session to Ephemeral Rollups
     const delegate = useCallback(async (): Promise<string> => {
         if (!program || !wallet.publicKey) {
             throw new Error("Wallet not connected");
         }
+
+        logStep(2, 3, "DELEGATING session to Ephemeral Rollup...");
+        logInfo("Delegation details:", {
+            sessionPDA: sessionPubkey?.toBase58(),
+            erEndpoint: ER_ENDPOINT
+        });
 
         setIsLoading(true);
         setIsDelegating(true);
@@ -657,34 +756,43 @@ export function useTypingSpeedGameProgram() {
                     skipPreflight: true,
                 });
 
-            // Wait a bit for delegation to propagate
+            logSuccess("DELEGATION TRANSACTION SENT!", { txSignature: tx });
+            logInfo("Waiting for delegation to propagate (2s)...");
+
             await new Promise(resolve => setTimeout(resolve, 2000));
 
-            // Recheck delegation status
             await checkDelegationStatus();
+
+            logSuccess("SESSION DELEGATED TO ER! 🚀", {
+                txSignature: tx,
+                sessionPDA: sessionPubkey?.toBase58(),
+                status: delegationStatus
+            });
 
             return tx;
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to delegate session";
+            logError("Failed to delegate", { error: message });
             setError(message);
             throw err;
         } finally {
             setIsLoading(false);
             setIsDelegating(false);
         }
-    }, [program, wallet.publicKey, checkDelegationStatus]);
+    }, [program, wallet.publicKey, sessionPubkey, checkDelegationStatus, delegationStatus]);
 
-    // Commit state from ER to base layer (runs on ER)
+    // Commit state from ER to base layer
     const commit = useCallback(async (): Promise<string> => {
         if (!program || !erProvider || !wallet.publicKey || !sessionPubkey) {
             throw new Error("Session not initialized or not delegated");
         }
 
+        logInfo("COMMITTING state from ER to base layer...");
+
         setIsLoading(true);
         setError(null);
 
         try {
-            // Build transaction using base program
             let tx = await program.methods
                 .commit()
                 .accounts({
@@ -692,33 +800,34 @@ export function useTypingSpeedGameProgram() {
                 })
                 .transaction();
 
-            // Set up for ER connection
             tx.feePayer = wallet.publicKey;
             tx.recentBlockhash = (await erConnection.getLatestBlockhash()).blockhash;
             tx = await erProvider.wallet.signTransaction(tx);
 
-            // Send using raw connection
             const txHash = await erConnection.sendRawTransaction(tx.serialize(), {
                 skipPreflight: true,
             });
+            
+            logInfo("Commit transaction sent:", txHash);
+            
             await erConnection.confirmTransaction(txHash, "confirmed");
 
-            // Try to get the commitment signature on base layer
             try {
-                // Dynamic import to avoid Buffer issues at module load time
                 const { GetCommitmentSignature } = await import("@magicblock-labs/ephemeral-rollups-sdk");
                 const txCommitSgn = await GetCommitmentSignature(txHash, erConnection);
-                console.log("Commit signature on base layer:", txCommitSgn);
+                logSuccess("COMMIT COMPLETE! Base layer signature:", txCommitSgn);
             } catch {
-                console.log("GetCommitmentSignature not available (might be expected on localnet)");
+                logWarning("GetCommitmentSignature not available");
             }
 
-            // Refresh base layer session data
             await fetchSessionAccount();
+
+            logSuccess("STATE COMMITTED TO BASE LAYER! 💾", { txSignature: txHash });
 
             return txHash;
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to commit session";
+            logError("Failed to commit", { error: message });
             setError(message);
             throw err;
         } finally {
@@ -726,17 +835,18 @@ export function useTypingSpeedGameProgram() {
         }
     }, [program, erProvider, erConnection, wallet.publicKey, sessionPubkey, fetchSessionAccount]);
 
-    // Undelegate the session from ER (runs on ER)
+    // Undelegate the session from ER
     const undelegate = useCallback(async (): Promise<string> => {
         if (!program || !erProvider || !wallet.publicKey || !sessionPubkey) {
             throw new Error("Session not initialized or not delegated");
         }
 
+        logInfo("UNDELEGATING session from ER...");
+
         setIsLoading(true);
         setError(null);
 
         try {
-            // Build transaction using base program
             let tx = await program.methods
                 .undelegate()
                 .accounts({
@@ -744,44 +854,35 @@ export function useTypingSpeedGameProgram() {
                 })
                 .transaction();
 
-            // Set up for ER connection
             tx.feePayer = wallet.publicKey;
             tx.recentBlockhash = (await erConnection.getLatestBlockhash()).blockhash;
             tx = await erProvider.wallet.signTransaction(tx);
 
-            // Send using raw connection
             const txHash = await erConnection.sendRawTransaction(tx.serialize(), {
                 skipPreflight: true,
             });
+            
+            logInfo("Undelegate transaction sent:", txHash);
+            
             await erConnection.confirmTransaction(txHash, "confirmed");
 
-            // Poll for ownership change on Base Layer
-            console.log("⏳ Waiting for Base Layer settlement...");
-            let ownershipRestored = false;
-            for (let i = 0; i < 30; i++) { // 30 seconds max
-                const info = await connection.getAccountInfo(sessionPubkey, "confirmed");
-                if (info && info.owner.equals(program.programId)) {
-                    console.log("✅ Ownership restored to Base Program!");
-                    ownershipRestored = true;
-                    break;
-                }
-                await new Promise(r => setTimeout(r, 1000));
-            }
+            logInfo("Waiting for undelegation to propagate (2s)...");
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
-            if (!ownershipRestored) {
-                console.warn("⚠️ Undelegation timed out waiting for Base Layer. Account might still be settling.");
-            }
-
-            // Update state
             setDelegationStatus("undelegated");
-            setErSessionData(null);
+            setErSessionValue(null);
 
-            // Refresh base layer session data
             await fetchSessionAccount();
+
+            logSuccess("SESSION UNDELEGATED! Back on base layer 🏠", {
+                txSignature: txHash,
+                sessionPDA: sessionPubkey.toBase58()
+            });
 
             return txHash;
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to undelegate session";
+            logError("Failed to undelegate", { error: message });
             setError(message);
             throw err;
         } finally {
@@ -790,66 +891,53 @@ export function useTypingSpeedGameProgram() {
     }, [program, erProvider, erConnection, wallet.publicKey, sessionPubkey, fetchSessionAccount]);
 
     return {
+        // Program
         program,
+        
+        // Account states
         sessionAccount,
-        sessionPubkey,
         personalRecordAccount,
+        sessionPubkey,
         personalRecordPubkey,
+        
+        // Loading states
         isLoading,
         isDelegating,
         error,
+        
         // Base layer operations
         initialize,
         initPersonalRecord,
         typeWord,
         endSession,
         saveToRecord,
+        
         // Ephemeral Rollups operations
         delegate,
         commit,
         undelegate,
         typeWordOnER,
         endSessionOnER,
+        
         // Delegation status
         delegationStatus,
-        erSessionData,
+        erSessionValue,
+        
         // Utilities
-        refetch: fetchSessionAccount,
+        refetchSession: fetchSessionAccount,
         refetchPersonalRecord: fetchPersonalRecordAccount,
         checkDelegation: checkDelegationStatus,
-        // Session key
+        
+        // Session keys
         createSession,
-        revokeSession,
         sessionToken,
         isSessionLoading,
-    };
-}
-
-/**
- * Backwards-compatible alias for useTypingSpeedGameProgram
- * Maps new field names to old counter-style names for Counter.tsx
- */
-export function useCounterProgram() {
-    const hook = useTypingSpeedGameProgram();
-    
-    // Create a counter-like account from the session account
-    const counterAccount = hook.sessionAccount ? {
-        count: BigInt(hook.sessionAccount.wordsTyped),
-        authority: hook.sessionAccount.player,
-    } : null;
-    
-    return {
-        ...hook,
-        // Map new names to old counter names
-        counterAccount,
-        counterPubkey: hook.sessionPubkey,
-        erCounterValue: hook.erSessionData ? BigInt(hook.erSessionData.wordsTyped) : null,
-        // Map typeWord to increment/decrement (for demo purposes)
-        increment: () => hook.typeWord(true),
-        decrement: () => hook.typeWord(false),
-        set: (value: number) => Promise.resolve("Not supported in typing game"),
-        incrementOnER: () => hook.typeWordOnER(true),
-        decrementOnER: () => hook.typeWordOnER(false),
-        setOnER: (value: number) => Promise.resolve("Not supported in typing game"),
+        
+        // PDA derivation utilities
+        deriveSessionPDA,
+        derivePersonalRecordPDA,
+        
+        // Connections for advanced usage
+        erConnection,
     };
 }
